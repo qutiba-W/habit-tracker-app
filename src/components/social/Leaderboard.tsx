@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useGameStats, getLevelFromXP } from '@/lib/hooks/useGameStats';
-import { collection, addDoc, serverTimestamp, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import FriendRequests from './FriendRequests';
 
 interface LeaderboardEntry {
     odid: string;
+    friendDocId?: string; // Document ID in friends collection
     displayName: string;
     email: string;
     level: number;
@@ -94,6 +95,7 @@ export default function Leaderboard() {
 
                     entries.push({
                         odid: friendDoc.id,
+                        friendDocId: friendDoc.id, // Store doc ID for deletion
                         displayName: friendData.displayName || friendData.email?.split('@')[0] || 'Friend',
                         email: friendData.email || '',
                         level: friendLevel,
@@ -160,6 +162,23 @@ export default function Leaderboard() {
             setMessage('Failed to send request. Please try again.');
         } finally {
             setIsAdding(false);
+        }
+    };
+
+    // Remove friend function
+    const handleRemoveFriend = async (friendDocId: string) => {
+        if (!user || !friendDocId) return;
+
+        if (!confirm('Are you sure you want to remove this friend?')) return;
+
+        try {
+            const friendRef = doc(db, `users/${user.uid}/friends/${friendDocId}`);
+            await deleteDoc(friendRef);
+
+            // Update leaderboard to remove the friend
+            setLeaderboard(prev => prev.filter(entry => entry.friendDocId !== friendDocId));
+        } catch (error) {
+            console.error('Error removing friend:', error);
         }
     };
 
@@ -254,6 +273,17 @@ export default function Leaderboard() {
                                 <div className="px-3 py-1 bg-dark-card rounded-full border border-gray-700">
                                     <span className="text-sm font-semibold text-white">Lvl {entry.level}</span>
                                 </div>
+
+                                {/* Remove Friend Button (only for friends, not current user) */}
+                                {!entry.isCurrentUser && entry.friendDocId && (
+                                    <button
+                                        onClick={() => handleRemoveFriend(entry.friendDocId!)}
+                                        className="ml-2 p-2 text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                        title="Remove friend"
+                                    >
+                                        🗑️
+                                    </button>
+                                )}
                             </div>
                         ))}
                     </div>

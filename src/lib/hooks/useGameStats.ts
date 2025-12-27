@@ -100,6 +100,19 @@ export function useGameStats(userId: string | undefined) {
                     return 'mighty';
                 };
 
+                // Handle weeklyXP - could be array or object from Firestore
+                let weeklyXP = [0, 0, 0, 0, 0, 0, 0];
+                if (data.weeklyXP) {
+                    if (Array.isArray(data.weeklyXP)) {
+                        weeklyXP = data.weeklyXP;
+                    } else if (typeof data.weeklyXP === 'object') {
+                        // Convert object {0: 10, 1: 20, ...} to array
+                        for (let i = 0; i < 7; i++) {
+                            weeklyXP[i] = data.weeklyXP[i] || data.weeklyXP[String(i)] || 0;
+                        }
+                    }
+                }
+
                 setStats({
                     totalXP,
                     level,
@@ -110,7 +123,7 @@ export function useGameStats(userId: string | undefined) {
                     habitsCompletedToday: data.habitsCompletedToday || 0,
                     totalHabitsToday: data.totalHabitsToday || 0,
                     healthBarPercentage: data.healthBarPercentage || 0,
-                    weeklyXP: data.weeklyXP || [0, 0, 0, 0, 0, 0, 0],
+                    weeklyXP: weeklyXP,
                     strengths: data.strengths || [],
                     weaknesses: data.weaknesses || [],
                 });
