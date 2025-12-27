@@ -42,6 +42,29 @@ service cloud.firestore {
       }
     }
     
+    // Friend Requests collection: Global collection for friend requests
+    // Users can read requests sent TO their email, and create/update requests they sent
+    match /friendRequests/{requestId} {
+      // Anyone authenticated can create a friend request
+      allow create: if isAuthenticated();
+      
+      // Users can read requests where they are the recipient (by email)
+      allow read: if isAuthenticated() && (
+        resource.data.toEmail == request.auth.token.email ||
+        resource.data.fromUserId == request.auth.uid
+      );
+      
+      // Recipient can update status (accept/reject)
+      allow update: if isAuthenticated() && 
+        resource.data.toEmail == request.auth.token.email;
+      
+      // Sender or recipient can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.toEmail == request.auth.token.email ||
+        resource.data.fromUserId == request.auth.uid
+      );
+    }
+    
     // Deny all other access
     match /{document=**} {
       allow read, write: if false;

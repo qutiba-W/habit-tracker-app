@@ -3,6 +3,7 @@
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useGameStats } from '@/lib/hooks/useGameStats';
 import { useHabits } from '@/lib/hooks/useHabits';
+import MoodAnalytics from './MoodAnalytics';
 
 interface HabitStat {
     title: string;
@@ -138,6 +139,9 @@ export default function AnalyticsDashboard() {
                     )}
                 </div>
             </div>
+
+            {/* Mental Wellness Analytics */}
+            <MoodAnalytics />
         </div>
     );
 }

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import FriendRequests from './FriendRequests';
 
 interface LeaderboardEntry {
     odid: string;
@@ -58,24 +59,23 @@ export default function Leaderboard() {
         setMessage('');
 
         try {
-            // In a real app, you'd search for the user by email and add them
-            // For now, we'll add a placeholder friend
-            const friendsRef = collection(db, `users/${user.uid}/friends`);
+            // Create a friend request in the global friendRequests collection
+            const friendRequestsRef = collection(db, 'friendRequests');
 
-            await addDoc(friendsRef, {
-                email: friendEmail,
-                displayName: friendEmail.split('@')[0],
-                treeLevel: 1,
-                totalXP: 0,
-                treeStage: 'seed',
-                addedAt: serverTimestamp(),
+            await addDoc(friendRequestsRef, {
+                fromEmail: user.email,
+                fromDisplayName: user.displayName || user.email?.split('@')[0],
+                fromUserId: user.uid,
+                toEmail: friendEmail.toLowerCase(),
+                status: 'pending',
+                createdAt: serverTimestamp(),
             });
 
             setMessage('Friend request sent! 🎉');
             setFriendEmail('');
         } catch (error) {
-            console.error('Error adding friend:', error);
-            setMessage('Failed to add friend. Please try again.');
+            console.error('Error sending friend request:', error);
+            setMessage('Failed to send request. Please try again.');
         } finally {
             setIsAdding(false);
         }
@@ -111,6 +111,11 @@ export default function Leaderboard() {
                 )}
             </div>
 
+            {/* Friend Requests */}
+            <div className="bg-dark-card p-6 rounded-xl border border-gray-800">
+                <FriendRequests />
+            </div>
+
             {/* Leaderboard */}
             <div className="bg-dark-card p-6 rounded-xl border border-gray-800">
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -122,8 +127,8 @@ export default function Leaderboard() {
                         <div
                             key={entry.odid}
                             className={`flex items-center gap-4 p-4 rounded-xl transition-all ${entry.isCurrentUser
-                                    ? 'bg-primary-500/20 border border-primary-500/50'
-                                    : 'bg-dark-bg hover:bg-dark-hover'
+                                ? 'bg-primary-500/20 border border-primary-500/50'
+                                : 'bg-dark-bg hover:bg-dark-hover'
                                 }`}
                         >
                             {/* Rank */}
