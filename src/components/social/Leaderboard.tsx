@@ -1,14 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { useGameStats, getLevelFromXP } from '@/lib/hooks/useGameStats';
+import { collection, addDoc, serverTimestamp, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import FriendRequests from './FriendRequests';
 
 interface LeaderboardEntry {
     odid: string;
     displayName: string;
+    email: string;
     level: number;
     totalXP: number;
     treeStage: string;
@@ -16,13 +18,13 @@ interface LeaderboardEntry {
     isCurrentUser: boolean;
 }
 
-const mockLeaderboard: LeaderboardEntry[] = [
-    { odid: '1', displayName: 'TreeMaster99', level: 42, totalXP: 8500, treeStage: 'tree', rank: 1, isCurrentUser: false },
-    { odid: '2', displayName: 'HabitHero', level: 38, totalXP: 7200, treeStage: 'tree', rank: 2, isCurrentUser: false },
-    { odid: '3', displayName: 'GrowthGuru', level: 31, totalXP: 5800, treeStage: 'tree', rank: 3, isCurrentUser: false },
-    { odid: '4', displayName: 'You', level: 15, totalXP: 1800, treeStage: 'sprout', rank: 4, isCurrentUser: true },
-    { odid: '5', displayName: 'NewSprout', level: 8, totalXP: 650, treeStage: 'sprout', rank: 5, isCurrentUser: false },
-];
+const getTreeStage = (level: number): string => {
+    if (level <= 5) return 'seed';
+    if (level <= 15) return 'sprout';
+    if (level <= 30) return 'sapling';
+    if (level <= 50) return 'tree';
+    return 'mighty';
+};
 
 const getTreeEmoji = (stage: string) => {
     switch (stage) {
@@ -46,10 +48,90 @@ const getRankBadge = (rank: number) => {
 
 export default function Leaderboard() {
     const { user } = useAuth();
+    const { stats } = useGameStats(user?.uid);
     const [friendEmail, setFriendEmail] = useState('');
     const [isAdding, setIsAdding] = useState(false);
     const [message, setMessage] = useState('');
-    const [leaderboard] = useState<LeaderboardEntry[]>(mockLeaderboard);
+    const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch real leaderboard data from friends
+    useEffect(() => {
+        if (!user) {
+            setLoading(false);
+            return;
+        }
+
+        const fetchLeaderboard = async () => {
+            try {
+                const entries: LeaderboardEntry[] = [];
+
+                // Add current user
+                const userLevel = getLevelFromXP(stats.totalXP);
+                entries.push({
+                    odid: user.uid,
+                    displayName: user.displayName || user.email?.split('@')[0] || 'You',
+                    email: user.email || '',
+                    level: userLevel,
+                    totalXP: stats.totalXP,
+                    treeStage: getTreeStage(userLevel),
+                    rank: 0, // Will be set after sorting
+                    isCurrentUser: true
+                });
+
+                // Fetch friends
+                const friendsRef = collection(db, `users/${user.uid}/friends`);
+                const friendsSnapshot = await getDocs(friendsRef);
+
+                // For each friend, try to get their stats
+                for (const friendDoc of friendsSnapshot.docs) {
+                    const friendData = friendDoc.data();
+
+                    // Try to get friend's stats (this may fail if they haven't granted access)
+                    // For now, use stored data from when they were added
+                    const friendXP = friendData.totalXP || 0;
+                    const friendLevel = friendData.level || getLevelFromXP(friendXP);
+
+                    entries.push({
+                        odid: friendDoc.id,
+                        displayName: friendData.displayName || friendData.email?.split('@')[0] || 'Friend',
+                        email: friendData.email || '',
+                        level: friendLevel,
+                        totalXP: friendXP,
+                        treeStage: getTreeStage(friendLevel),
+                        rank: 0,
+                        isCurrentUser: false
+                    });
+                }
+
+                // Sort by XP and assign ranks
+                entries.sort((a, b) => b.totalXP - a.totalXP);
+                entries.forEach((entry, index) => {
+                    entry.rank = index + 1;
+                });
+
+                setLeaderboard(entries);
+            } catch (error) {
+                console.error('Error fetching leaderboard:', error);
+                // Fallback to just showing current user
+                const userLevel = getLevelFromXP(stats.totalXP);
+                setLeaderboard([{
+                    odid: user.uid,
+                    displayName: user.displayName || user.email?.split('@')[0] || 'You',
+                    email: user.email || '',
+                    level: userLevel,
+                    totalXP: stats.totalXP,
+                    treeStage: getTreeStage(userLevel),
+                    rank: 1,
+                    isCurrentUser: true
+                }]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchLeaderboard();
+    }, [user, stats.totalXP]);
 
     const handleAddFriend = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -81,6 +163,17 @@ export default function Leaderboard() {
         }
     };
 
+    // Calculate days until end of week (Sunday)
+    const getDaysUntilWeekEnd = () => {
+        const today = new Date();
+        const dayOfWeek = today.getDay(); // 0 = Sunday
+        const daysUntil = dayOfWeek === 0 ? 7 : 7 - dayOfWeek;
+        return daysUntil;
+    };
+
+    // Calculate weekly XP from stats
+    const weeklyXP = stats.weeklyXP?.reduce((sum, val) => sum + val, 0) || 0;
+
     return (
         <div className="space-y-6">
             {/* Add Friend Form */}
@@ -101,7 +194,7 @@ export default function Leaderboard() {
                         disabled={isAdding}
                         className="px-6 py-2 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-lg transition disabled:opacity-50"
                     >
-                        {isAdding ? 'Adding...' : 'Add'}
+                        {isAdding ? 'Sending...' : 'Add'}
                     </button>
                 </form>
                 {message && (
@@ -122,47 +215,53 @@ export default function Leaderboard() {
                     🏆 Leaderboard
                 </h3>
 
-                <div className="space-y-2">
-                    {leaderboard.map((entry) => (
-                        <div
-                            key={entry.odid}
-                            className={`flex items-center gap-4 p-4 rounded-xl transition-all ${entry.isCurrentUser
-                                ? 'bg-primary-500/20 border border-primary-500/50'
-                                : 'bg-dark-bg hover:bg-dark-hover'
-                                }`}
-                        >
-                            {/* Rank */}
-                            <div className="w-12 text-center">
-                                <span className="text-xl">{getRankBadge(entry.rank)}</span>
-                            </div>
+                {loading ? (
+                    <div className="flex justify-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        {leaderboard.map((entry) => (
+                            <div
+                                key={entry.odid}
+                                className={`flex items-center gap-4 p-4 rounded-xl transition-all ${entry.isCurrentUser
+                                    ? 'bg-primary-500/20 border border-primary-500/50'
+                                    : 'bg-dark-bg hover:bg-dark-hover'
+                                    }`}
+                            >
+                                {/* Rank */}
+                                <div className="w-12 text-center">
+                                    <span className="text-xl">{getRankBadge(entry.rank)}</span>
+                                </div>
 
-                            {/* Tree Icon */}
-                            <div className="w-10 h-10 flex items-center justify-center text-2xl">
-                                {getTreeEmoji(entry.treeStage)}
-                            </div>
+                                {/* Tree Icon */}
+                                <div className="w-10 h-10 flex items-center justify-center text-2xl">
+                                    {getTreeEmoji(entry.treeStage)}
+                                </div>
 
-                            {/* User Info */}
-                            <div className="flex-1">
-                                <p className={`font-semibold ${entry.isCurrentUser ? 'text-primary-500' : 'text-white'}`}>
-                                    {entry.displayName}
-                                    {entry.isCurrentUser && ' (You)'}
-                                </p>
-                                <p className="text-sm text-gray-400">
-                                    Level {entry.level} • {entry.totalXP.toLocaleString()} XP
-                                </p>
-                            </div>
+                                {/* User Info */}
+                                <div className="flex-1">
+                                    <p className={`font-semibold ${entry.isCurrentUser ? 'text-primary-500' : 'text-white'}`}>
+                                        {entry.displayName}
+                                        {entry.isCurrentUser && ' (You)'}
+                                    </p>
+                                    <p className="text-sm text-gray-400">
+                                        Level {entry.level} • {entry.totalXP.toLocaleString()} XP
+                                    </p>
+                                </div>
 
-                            {/* Level Badge */}
-                            <div className="px-3 py-1 bg-dark-card rounded-full border border-gray-700">
-                                <span className="text-sm font-semibold text-white">Lvl {entry.level}</span>
+                                {/* Level Badge */}
+                                <div className="px-3 py-1 bg-dark-card rounded-full border border-gray-700">
+                                    <span className="text-sm font-semibold text-white">Lvl {entry.level}</span>
+                                </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                )}
 
-                {leaderboard.length === 0 && (
-                    <p className="text-center text-gray-500 py-8">
-                        Add friends to see the leaderboard!
+                {!loading && leaderboard.length <= 1 && (
+                    <p className="text-center text-gray-500 py-4 mt-4 border-t border-gray-800">
+                        Add friends to compete and see them on your leaderboard! 🌱
                     </p>
                 )}
             </div>
@@ -178,19 +277,27 @@ export default function Leaderboard() {
                     </div>
                     <div className="text-right">
                         <p className="text-sm text-gray-400">Ends in</p>
-                        <p className="text-xl font-bold text-yellow-500">3 days</p>
+                        <p className="text-xl font-bold text-yellow-500">{getDaysUntilWeekEnd()} days</p>
                     </div>
                 </div>
 
                 <div className="mt-4 p-4 bg-dark-bg/50 rounded-lg">
                     <div className="flex items-center justify-between">
                         <span className="text-gray-300">Your weekly XP</span>
-                        <span className="text-xl font-bold text-primary-500">450 XP</span>
+                        <span className="text-xl font-bold text-primary-500">{weeklyXP.toLocaleString()} XP</span>
                     </div>
                     <div className="mt-2 h-2 bg-dark-bg rounded-full overflow-hidden">
-                        <div className="h-full w-3/4 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full"></div>
+                        <div
+                            className="h-full bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full transition-all"
+                            style={{ width: `${Math.min((weeklyXP / 1000) * 100, 100)}%` }}
+                        ></div>
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">150 XP to reach #3</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                        {leaderboard.length > 1
+                            ? `Keep going to climb the ranks!`
+                            : `Add friends to start competing!`
+                        }
+                    </p>
                 </div>
             </div>
         </div>

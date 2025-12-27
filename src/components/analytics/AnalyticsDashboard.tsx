@@ -34,10 +34,13 @@ export default function AnalyticsDashboard() {
     const strengths = [...habitStats].sort((a, b) => b.completionRate - a.completionRate).slice(0, 3);
     const weaknesses = [...habitStats].sort((a, b) => a.completionRate - b.completionRate).slice(0, 3);
 
-    // Mock weekly data (in real app, this comes from history)
-    const weeklyData = stats.weeklyXP.length > 0 ? stats.weeklyXP : [45, 78, 62, 89, 95, 67, 82];
+    // Weekly data from user's actual stats (zeros if no data yet)
+    const weeklyData = stats.weeklyXP && stats.weeklyXP.some(v => v > 0)
+        ? stats.weeklyXP
+        : [0, 0, 0, 0, 0, 0, 0];
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const maxValue = Math.max(...weeklyData, 1);
+    const hasWeeklyData = weeklyData.some(v => v > 0);
 
     return (
         <div className="space-y-6">
@@ -64,23 +67,31 @@ export default function AnalyticsDashboard() {
             {/* Weekly Progress Chart */}
             <div className="bg-dark-card p-6 rounded-xl border border-gray-800">
                 <h3 className="text-lg font-semibold text-white mb-4">📊 Weekly Progress</h3>
-                <div className="flex items-end justify-between h-48 gap-2">
-                    {weeklyData.map((value, index) => (
-                        <div key={index} className="flex-1 flex flex-col items-center">
-                            <div className="relative w-full flex justify-center mb-2">
-                                <div
-                                    className="w-8 md:w-12 bg-gradient-to-t from-primary-600 to-primary-400 rounded-t-lg transition-all duration-500"
-                                    style={{ height: `${(value / maxValue) * 160}px` }}
-                                >
-                                    <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-gray-400">
-                                        {value}%
-                                    </span>
+                {hasWeeklyData ? (
+                    <div className="flex items-end justify-between h-48 gap-2">
+                        {weeklyData.map((value, index) => (
+                            <div key={index} className="flex-1 flex flex-col items-center">
+                                <div className="relative w-full flex justify-center mb-2">
+                                    <div
+                                        className="w-8 md:w-12 bg-gradient-to-t from-primary-600 to-primary-400 rounded-t-lg transition-all duration-500"
+                                        style={{ height: `${(value / maxValue) * 160}px` }}
+                                    >
+                                        <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-gray-400">
+                                            {value}%
+                                        </span>
+                                    </div>
                                 </div>
+                                <span className="text-xs text-gray-500">{days[index]}</span>
                             </div>
-                            <span className="text-xs text-gray-500">{days[index]}</span>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center h-48 text-gray-500">
+                        <span className="text-4xl mb-2">📈</span>
+                        <p>Complete habits this week to see your progress!</p>
+                        <p className="text-sm mt-1">Your weekly data will appear here</p>
+                    </div>
+                )}
             </div>
 
             {/* Strengths & Weaknesses */}
