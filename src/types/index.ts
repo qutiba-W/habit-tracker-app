@@ -20,6 +20,7 @@ export interface Habit {
     points: number;
     streak: number;
     color: string;
+    completionHistory?: { [date: string]: boolean }; // Track completion per day
 }
 
 export interface UserStats {

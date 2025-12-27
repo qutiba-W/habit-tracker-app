@@ -30,6 +30,16 @@ service cloud.firestore {
       match /history/{document=**} {
         allow read, write: if isAuthenticated() && isOwner(userId);
       }
+      
+      // Friends subcollection: Users can manage their own friends
+      match /friends/{friendId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+      
+      // Wellness subcollection: Users can manage their own wellness/mood data
+      match /wellness/{document=**} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
     }
     
     // Deny all other access

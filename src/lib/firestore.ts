@@ -63,10 +63,12 @@ export const toggleHabitCompletion = async (
 ): Promise<void> => {
     const habitRef = doc(db, `users/${userId}/habits/${habitId}`);
     const newStatus = !currentStatus;
+    const today = new Date().toISOString().split('T')[0];
 
     const updates: any = {
         isCompleted: newStatus,
         lastCompletedAt: newStatus ? (serverTimestamp() as Timestamp) : null,
+        [`completionHistory.${today}`]: newStatus, // Track today's completion
     };
 
     // Update streak
@@ -79,4 +81,17 @@ export const toggleHabitCompletion = async (
     }
 
     await updateDoc(habitRef, updates);
+};
+
+// Update habit completion history for a specific date
+export const updateHabitHistory = async (
+    userId: string,
+    habitId: string,
+    date: string,
+    completed: boolean
+): Promise<void> => {
+    const habitRef = doc(db, `users/${userId}/habits/${habitId}`);
+    await updateDoc(habitRef, {
+        [`completionHistory.${date}`]: completed
+    });
 };

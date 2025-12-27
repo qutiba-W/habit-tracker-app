@@ -9,8 +9,9 @@ import AddHabitModal from '@/components/habits/AddHabitModal';
 import TreeVisual from '@/components/game/TreeVisual';
 import AnalyticsDashboard from '@/components/analytics/AnalyticsDashboard';
 import Leaderboard from '@/components/social/Leaderboard';
+import MoodTracker from '@/components/wellness/MoodTracker';
 
-type TabType = 'tree' | 'habits' | 'analytics' | 'leaderboard';
+type TabType = 'tree' | 'habits' | 'analytics' | 'leaderboard' | 'wellness';
 
 export default function DashboardPage() {
     const { user, loading, signOut } = useAuth();
@@ -46,6 +47,7 @@ export default function DashboardPage() {
     const tabs = [
         { id: 'tree' as TabType, label: '🌳 My Tree', icon: '🌳' },
         { id: 'habits' as TabType, label: '📋 Habits', icon: '📋' },
+        { id: 'wellness' as TabType, label: '🧠 Wellness', icon: '🧠' },
         { id: 'analytics' as TabType, label: '📊 Analytics', icon: '📊' },
         { id: 'leaderboard' as TabType, label: '🏆 Leaderboard', icon: '🏆' },
     ];
@@ -100,8 +102,8 @@ export default function DashboardPage() {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`px-4 py-3 text-sm font-medium whitespace-nowrap transition-all border-b-2 ${activeTab === tab.id
-                                        ? 'text-primary-500 border-primary-500'
-                                        : 'text-gray-400 border-transparent hover:text-white hover:border-gray-600'
+                                    ? 'text-primary-500 border-primary-500'
+                                    : 'text-gray-400 border-transparent hover:text-white hover:border-gray-600'
                                     }`}
                             >
                                 <span className="hidden sm:inline">{tab.label}</span>
@@ -212,6 +214,13 @@ export default function DashboardPage() {
                     <div>
                         <h2 className="text-2xl font-bold text-white mb-6">📊 Analytics</h2>
                         <AnalyticsDashboard />
+                    </div>
+                )}
+
+                {/* Wellness Tab */}
+                {activeTab === 'wellness' && (
+                    <div>
+                        <MoodTracker />
                     </div>
                 )}
 
