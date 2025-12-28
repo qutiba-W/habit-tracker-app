@@ -94,12 +94,19 @@ export const toggleHabitCompletion = async (
     userId: string,
     habitId: string,
     currentStatus: boolean,
-    currentStreak: number
+    currentStreak: number,
+    completionHistory: Record<string, boolean> = {}
 ): Promise<void> => {
     const habitRef = doc(db, `users/${userId}/habits/${habitId}`);
     const newStatus = !currentStatus;
     const today = new Date().toISOString().split('T')[0];
     const dayOfWeek = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+    // Calculate yesterday's date
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const wasYesterdayCompleted = completionHistory[yesterdayStr] === true;
 
     const updates: any = {
         isCompleted: newStatus,
@@ -107,17 +114,31 @@ export const toggleHabitCompletion = async (
         [`completionHistory.${today}`]: newStatus, // Track today's completion
     };
 
-    // Calculate XP earned (10 XP per completion + streak bonus)
-    const xpEarned = 10 + (currentStreak * 2);
+    // Calculate XP earned (15 XP per completion + streak bonus)
+    const xpEarned = 15 + (currentStreak * 2);
 
-    // Update streak and points
+    // Update streak and points based on proper streak logic
     if (newStatus) {
-        updates.streak = currentStreak + 1;
-        updates.points = (currentStreak + 1) * 10;
+        // CHECKING: Calculate new streak
+        if (wasYesterdayCompleted) {
+            // Yesterday was completed - continue the streak
+            updates.streak = currentStreak + 1;
+        } else {
+            // Yesterday was NOT completed - reset streak to 1
+            updates.streak = 1;
+        }
+        updates.points = updates.streak * 10;
     } else {
+        // UNCHECKING: Decrement streak (but never below 0)
         updates.streak = Math.max(0, currentStreak - 1);
-        updates.points = Math.max(0, currentStreak - 1) * 10;
+        updates.points = Math.max(0, updates.streak) * 10;
     }
+
+    // Safeguard: Read current stats to prevent negative values
+    const statsRef = doc(db, `users/${userId}/stats/summary`);
+    const statsSnap = await getDoc(statsRef);
+    const currentStats = statsSnap.data() || {};
+    const currentXP = currentStats.totalXP || 0;
 
     await updateDoc(habitRef, updates);
 
@@ -132,14 +153,63 @@ export const toggleHabitCompletion = async (
 
         // Update weekly XP for the current day
         statsUpdates[`weeklyXP.${dayOfWeek}`] = increment(xpEarned);
+
+        // Update streak if this is the first habit completed today
+        const currentHabitsCompleted = currentStats.habitsCompletedToday || 0;
+        if (currentHabitsCompleted === 0) {
+            // First habit of the day - update streak
+            const lastResetDate = currentStats.lastResetDate || '';
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+            const currentStreak = currentStats.currentStreak || 0;
+            const longestStreak = currentStats.longestStreak || 0;
+
+            if (lastResetDate === yesterdayStr) {
+                // Consecutive day - increment streak
+                const newStreak = currentStreak + 1;
+                statsUpdates.currentStreak = newStreak;
+                if (newStreak > longestStreak) {
+                    statsUpdates.longestStreak = newStreak;
+                }
+            } else if (lastResetDate !== today) {
+                // Not consecutive - reset streak to 1
+                statsUpdates.currentStreak = 1;
+            }
+            // Update last reset date
+            statsUpdates.lastResetDate = today;
+        }
     } else {
         // Uncompleting a habit: remove XP and decrement completed count
-        statsUpdates.totalXP = increment(-xpEarned);
-        statsUpdates.totalPoints = increment(-10);
-        statsUpdates.habitsCompletedToday = increment(-1);
+        // SAFETY CHECK: Do not go below zero for any stat
+        const currentPoints = currentStats.totalPoints || 0;
+        const currentHabitsCompleted = currentStats.habitsCompletedToday || 0;
+
+        // XP safeguard
+        let xpDelta = -xpEarned;
+        if (currentXP + xpDelta < 0) {
+            xpDelta = -currentXP;
+        }
+
+        // Points safeguard
+        let pointsDelta = -10;
+        if (currentPoints + pointsDelta < 0) {
+            pointsDelta = -currentPoints;
+        }
+
+        // HabitsCompleted safeguard
+        let habitsDelta = -1;
+        if (currentHabitsCompleted + habitsDelta < 0) {
+            habitsDelta = -currentHabitsCompleted;
+        }
+
+        statsUpdates.totalXP = increment(xpDelta);
+        statsUpdates.totalPoints = increment(pointsDelta);
+        statsUpdates.habitsCompletedToday = increment(habitsDelta);
 
         // Update weekly XP for the current day
-        statsUpdates[`weeklyXP.${dayOfWeek}`] = increment(-xpEarned);
+        statsUpdates[`weeklyXP.${dayOfWeek}`] = increment(xpDelta);
     }
 
     await updateUserStats(userId, statsUpdates);

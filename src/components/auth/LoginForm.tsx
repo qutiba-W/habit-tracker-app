@@ -3,6 +3,38 @@
 import { useState } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 
+// Map Firebase error codes to user-friendly messages
+const getErrorMessage = (error: any): string => {
+    const code = error?.code || '';
+
+    switch (code) {
+        case 'auth/invalid-credential':
+            return '❌ Invalid email or password. Please check your credentials or sign up for a new account.';
+        case 'auth/user-not-found':
+            return '❌ No account found with this email. Please sign up first.';
+        case 'auth/wrong-password':
+            return '❌ Incorrect password. Please try again.';
+        case 'auth/email-already-in-use':
+            return '❌ This email is already registered. Please sign in instead.';
+        case 'auth/weak-password':
+            return '❌ Password is too weak. Use at least 6 characters.';
+        case 'auth/invalid-email':
+            return '❌ Please enter a valid email address.';
+        case 'auth/too-many-requests':
+            return '⚠️ Too many failed attempts. Please wait a few minutes and try again.';
+        case 'auth/network-request-failed':
+            return '🌐 Network error. Please check your internet connection.';
+        case 'auth/popup-closed-by-user':
+            return 'Sign-in was cancelled. Please try again.';
+        case 'auth/popup-blocked':
+            return '⚠️ Pop-up was blocked. Please allow pop-ups for this site and try again.';
+        case 'auth/cancelled-popup-request':
+            return 'Sign-in was cancelled.';
+        default:
+            return error?.message || '❌ Authentication failed. Please try again.';
+    }
+};
+
 export default function LoginForm() {
     const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
     const [isSignUp, setIsSignUp] = useState(false);
@@ -24,7 +56,7 @@ export default function LoginForm() {
                 await signInWithEmail(email, password);
             }
         } catch (err: any) {
-            setError(err.message || 'Authentication failed');
+            setError(getErrorMessage(err));
         } finally {
             setLoading(false);
         }
@@ -37,11 +69,12 @@ export default function LoginForm() {
         try {
             await signInWithGoogle();
         } catch (err: any) {
-            setError(err.message || 'Google sign-in failed');
+            setError(getErrorMessage(err));
         } finally {
             setLoading(false);
         }
     };
+
 
     return (
         <div className="w-full max-w-md mx-auto">

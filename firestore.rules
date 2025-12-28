@@ -21,9 +21,30 @@ service cloud.firestore {
         allow read, write: if isAuthenticated() && isOwner(userId);
       }
       
-      // Stats subcollection: Users can only access their own stats
+      // Courses subcollection: Users can write their own courses
+      // Any authenticated user can READ (for friend study comparison)
+      match /courses/{courseId} {
+        allow write: if isAuthenticated() && isOwner(userId);
+        allow read: if isAuthenticated();
+        
+        // Subjects subcollection under courses
+        match /subjects/{subjectId} {
+          allow write: if isAuthenticated() && isOwner(userId);
+          allow read: if isAuthenticated();
+        }
+      }
+      
+      // Study Sessions subcollection
+      match /studySessions/{sessionId} {
+        allow write: if isAuthenticated() && isOwner(userId);
+        allow read: if isAuthenticated();
+      }
+      
+      // Stats subcollection: Users can read/write their own stats
+      // Other authenticated users can READ stats (for leaderboard)
       match /stats/{document=**} {
-        allow read, write: if isAuthenticated() && isOwner(userId);
+        allow write: if isAuthenticated() && isOwner(userId);
+        allow read: if isAuthenticated();
       }
       
       // History subcollection: Users can only access their own history
@@ -31,13 +52,23 @@ service cloud.firestore {
         allow read, write: if isAuthenticated() && isOwner(userId);
       }
       
-      // Friends subcollection: Users can manage their own friends
+      // Friends subcollection: 
+      // - Any authenticated user can CREATE a friend entry (for bidirectional friend acceptance)
+      // - Only the owner can UPDATE or DELETE friends
+      // - Any authenticated user can READ (for leaderboard)
       match /friends/{friendId} {
-        allow read, write: if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated();
+        allow update, delete: if isAuthenticated() && isOwner(userId);
+        allow read: if isAuthenticated();
       }
       
       // Wellness subcollection: Users can manage their own wellness/mood data
       match /wellness/{document=**} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+
+      // Wellness Logs (New Collection)
+      match /wellnessLogs/{document=**} {
         allow read, write: if isAuthenticated() && isOwner(userId);
       }
     }

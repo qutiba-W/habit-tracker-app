@@ -73,15 +73,19 @@ const ensureUserDocument = async (user: FirebaseUser): Promise<void> => {
             lastLoginAt: serverTimestamp(),
         });
 
-        // Initialize stats document
+        // Initialize stats document with all required fields
         const statsRef = doc(db, `users/${user.uid}/stats/summary`);
         await setDoc(statsRef, {
+            totalXP: 0,
             totalPoints: 0,
             currentStreak: 0,
             longestStreak: 0,
             habitsCompletedToday: 0,
             totalHabitsToday: 0,
             healthBarPercentage: 0,
+            weeklyXP: [0, 0, 0, 0, 0, 0, 0],
+            schemaVersion: 3, // Current schema version
+            lastResetDate: new Date().toISOString().split('T')[0],
             lastUpdated: serverTimestamp(),
         });
     } else {

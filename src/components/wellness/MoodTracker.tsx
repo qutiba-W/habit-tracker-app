@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, setDoc, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 interface MoodEntry {
@@ -82,19 +82,31 @@ export default function MoodTracker() {
     const loadMoodHistory = async () => {
         if (!user) return;
         try {
-            const moodDocRef = doc(db, `users/${user.uid}/wellness/mood`);
-            const moodDoc = await getDoc(moodDocRef);
-            if (moodDoc.exists()) {
-                setMoodHistory(moodDoc.data().history || {});
-                // Load today's entry if exists
-                const today = moodDoc.data().history?.[todayStr];
-                if (today) {
-                    setSelectedMood(today.mood);
-                    setEnergy(today.energy);
-                    setAnxiety(today.anxiety);
-                    setSleep(today.sleep);
-                    setNotes(today.notes || '');
-                }
+            const logsRef = collection(db, `users/${user.uid}/wellnessLogs`);
+            // Query logs within the current month view would be ideal, but for now fetch recent
+            const q = query(logsRef, orderBy('timestamp', 'desc'), limit(30));
+
+            const snapshot = await getDocs(q);
+            const history: MoodHistory = {};
+
+            snapshot.forEach(doc => {
+                const data = doc.data() as MoodEntry;
+                // Use doc ID as date key (YYYY-MM-DD)
+                history[doc.id] = data;
+            });
+
+            setMoodHistory(history);
+
+            // Load today's entry if exists
+            const today = history[todayStr];
+            if (today) {
+                // If saved as number, map back to string? 
+                // Currently assuming saving 'mood' as string and 'moodValue' as number
+                setSelectedMood(today.mood);
+                setEnergy(today.energy);
+                setAnxiety(today.anxiety);
+                setSleep(today.sleep);
+                setNotes(today.notes || '');
             }
         } catch (error) {
             console.error('Error loading mood history:', error);
@@ -106,9 +118,15 @@ export default function MoodTracker() {
 
         setIsSaving(true);
         try {
-            const moodDocRef = doc(db, `users/${user.uid}/wellness/mood`);
-            const newEntry: MoodEntry = {
-                mood: selectedMood as MoodEntry['mood'],
+            const moodValueMap: Record<string, number> = {
+                'great': 5, 'good': 4, 'okay': 3, 'low': 2, 'bad': 1
+            };
+
+            const moodDocRef = doc(db, `users/${user.uid}/wellnessLogs/${todayStr}`);
+
+            const newEntry = {
+                mood: selectedMood as 'great' | 'good' | 'okay' | 'low' | 'bad',
+                moodValue: moodValueMap[selectedMood] || 3, // Numeric for graph
                 energy,
                 anxiety,
                 sleep,
@@ -116,10 +134,12 @@ export default function MoodTracker() {
                 timestamp: new Date().toISOString()
             };
 
-            const newHistory = { ...moodHistory, [todayStr]: newEntry };
-            await setDoc(moodDocRef, { history: newHistory }, { merge: true });
+            await setDoc(moodDocRef, newEntry);
+
+            const newHistory = { ...moodHistory, [todayStr]: newEntry as MoodEntry };
             setMoodHistory(newHistory);
-        } catch (error) {
+            console.log('Mood saved successfully');
+        } catch (error: any) {
             console.error('Error saving mood:', error);
         } finally {
             setIsSaving(false);

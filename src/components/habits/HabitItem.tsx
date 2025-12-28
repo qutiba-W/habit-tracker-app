@@ -20,7 +20,8 @@ export default function HabitItem({ habit, userId }: HabitItemProps) {
             userId,
             habit.id,
             habit.isCompleted,
-            habit.streak
+            habit.streak,
+            habit.completionHistory || {}
         );
     };
 

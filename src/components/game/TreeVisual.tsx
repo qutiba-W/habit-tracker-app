@@ -19,7 +19,8 @@ const getTreeStage = (level: number) => {
 
 const TreeVisual = ({ level, xp, maxXpForLevel }: TreeVisualProps) => {
     const stage = useMemo(() => getTreeStage(level), [level]);
-    const progressPercent = Math.min((xp / maxXpForLevel) * 100, 100);
+    const safeXp = Math.max(0, xp);
+    const progressPercent = Math.min((safeXp / maxXpForLevel) * 100, 100);
 
     return (
         <div className="relative flex flex-col items-center">

@@ -25,15 +25,22 @@ export default function FriendRequests() {
             return;
         }
 
+        // Normalize email for consistency
+        const normalizedEmail = user.email.toLowerCase();
+
         // Listen for friend requests sent TO this user's email
+        // Using single field query + client filter to avoid compound index requirement
         const requestsRef = collection(db, 'friendRequests');
-        const q = query(requestsRef, where('toEmail', '==', user.email), where('status', '==', 'pending'));
+        const q = query(requestsRef, where('toEmail', '==', normalizedEmail));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const requestData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as FriendRequest));
+            const requestData = snapshot.docs
+                .map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                } as FriendRequest))
+                .filter(req => req.status === 'pending'); // Filter client-side
+
             setRequests(requestData);
             setLoading(false);
         }, (error) => {
@@ -53,7 +60,7 @@ export default function FriendRequests() {
                 status: 'accepted'
             });
 
-            // Add each user to the other's friends list
+            // 1. Add Requestor to My Friends List
             const myFriendsRef = collection(db, `users/${user.uid}/friends`);
             await addDoc(myFriendsRef, {
                 email: request.fromEmail,
@@ -62,8 +69,14 @@ export default function FriendRequests() {
                 addedAt: serverTimestamp()
             });
 
-            // Note: In a full implementation, you'd also add to their friends list
-            // This would require a Cloud Function for proper security
+            // 2. Add Me to Requestor's Friends List (Bi-directional)
+            const theirFriendsRef = collection(db, `users/${request.fromUserId}/friends`);
+            await addDoc(theirFriendsRef, {
+                email: user.email,
+                displayName: user.displayName || user.email?.split('@')[0],
+                userId: user.uid,
+                addedAt: serverTimestamp()
+            });
 
         } catch (error) {
             console.error('Error accepting friend request:', error);
